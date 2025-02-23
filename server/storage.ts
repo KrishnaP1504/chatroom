@@ -1,77 +1,61 @@
-import { User, Message, InsertUser, InsertMessage, UpdateUser } from "@shared/schema";
 import session from "express-session";
-import createMemoryStore from "memorystore";
-
-const MemoryStore = createMemoryStore(session);
+import { User, Message } from "./db/models";
+import type { IUser, IMessage } from "./db/models";
+import { InsertUser, InsertMessage, UpdateUser } from "@shared/schema";
+import MongoStore from "connect-mongo";
 
 export interface IStorage {
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  getUsers(): Promise<User[]>;
-  createUser(user: InsertUser & { userId: string }): Promise<User>;
-  updateUser(id: number, update: UpdateUser): Promise<User>;
-  getMessages(): Promise<Message[]>;
-  createMessage(message: InsertMessage & { userId: number }): Promise<Message>;
+  getUser(id: string): Promise<IUser | null>;
+  getUserByUsername(username: string): Promise<IUser | null>;
+  getUserByEmail(email: string): Promise<IUser | null>;
+  getUsers(): Promise<IUser[]>;
+  createUser(user: InsertUser & { userId: string }): Promise<IUser>;
+  updateUser(id: string, update: UpdateUser): Promise<IUser>;
+  getMessages(): Promise<IMessage[]>;
+  createMessage(message: InsertMessage & { userId: string }): Promise<IMessage>;
   sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private messages: Map<number, Message>;
+export class MongoStorage implements IStorage {
   sessionStore: session.Store;
-  private currentUserId: number;
-  private currentMessageId: number;
 
   constructor() {
-    this.users = new Map();
-    this.messages = new Map();
-    this.currentUserId = 1;
-    this.currentMessageId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+    this.sessionStore = MongoStore.create({
+      mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/chatroom',
+      collectionName: 'sessions',
+      ttl: 24 * 60 * 60 // 1 day
     });
   }
 
-  async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+  async getUser(id: string): Promise<IUser | null> {
+    return await User.findById(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getUserByUsername(username: string): Promise<IUser | null> {
+    return await User.findOne({ username });
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email === email,
-    );
+  async getUserByEmail(email: string): Promise<IUser | null> {
+    return await User.findOne({ email });
   }
 
-  async getUsers(): Promise<User[]> {
-    return Array.from(this.users.values());
+  async getUsers(): Promise<IUser[]> {
+    return await User.find();
   }
 
-  async createUser(insertUser: InsertUser & { userId: string }): Promise<User> {
-    const id = this.currentUserId++;
-    const user = { 
-      ...insertUser, 
-      id,
-      createdAt: new Date(),
-      avatar: null,
-      status: "online",
-      lastSeen: null
-    };
-    this.users.set(id, user);
-    return user;
+  async createUser(insertUser: InsertUser & { userId: string }): Promise<IUser> {
+    const user = new User({
+      ...insertUser,
+      status: 'online',
+      lastSeen: new Date()
+    });
+    return await user.save();
   }
 
-  async updateUser(id: number, update: UpdateUser): Promise<User> {
-    const user = await this.getUser(id);
+  async updateUser(id: string, update: UpdateUser): Promise<IUser> {
+    const user = await User.findById(id);
     if (!user) throw new Error("User not found");
 
-    // Check if username is taken
     if (update.username) {
       const existing = await this.getUserByUsername(update.username);
       if (existing && existing.id !== id) {
@@ -79,31 +63,22 @@ export class MemStorage implements IStorage {
       }
     }
 
-    const updatedUser = {
-      ...user,
-      ...update,
-    };
-    this.users.set(id, updatedUser);
-    return updatedUser;
+    Object.assign(user, update);
+    return await user.save();
   }
 
-  async getMessages(): Promise<Message[]> {
-    return Array.from(this.messages.values()).sort((a, b) => 
-      a.createdAt.getTime() - b.createdAt.getTime()
-    );
+  async getMessages(): Promise<IMessage[]> {
+    return await Message.find().sort({ createdAt: 1 }).populate('userId');
   }
 
-  async createMessage(message: InsertMessage & { userId: number }): Promise<Message> {
-    const id = this.currentMessageId++;
-    const newMessage = {
-      ...message,
-      id,
-      createdAt: new Date(),
-      reactions: [],
-    };
-    this.messages.set(id, newMessage);
-    return newMessage;
+  async createMessage(message: InsertMessage & { userId: string }): Promise<IMessage> {
+    const newMessage = new Message({
+      content: message.content,
+      userId: message.userId,
+      reactions: []
+    });
+    return await newMessage.save();
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new MongoStorage();

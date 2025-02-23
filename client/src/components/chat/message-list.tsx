@@ -24,7 +24,7 @@ export default function MessageList() {
   });
 
   // Filter messages based on search query
-  const filteredMessages = messages.filter(message => 
+  const filteredMessages = messages.filter(message =>
     message.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -36,7 +36,12 @@ export default function MessageList() {
       if (isConnecting) return;
       setIsConnecting(true);
 
-      const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+      // Use window.location to construct WebSocket URL with explicit ws/wss protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/ws`;
+
+      console.log('Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -45,11 +50,17 @@ export default function MessageList() {
       };
 
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        queryClient.setQueryData<Message[]>(["/api/messages"], (old = []) => [
-          ...old,
-          message,
-        ]);
+        const data = JSON.parse(event.data);
+        if (data.type === 'users') {
+          // Handle users update
+          queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+        } else {
+          // Handle new message
+          queryClient.setQueryData<Message[]>(["/api/messages"], (old = []) => [
+            ...old,
+            data,
+          ]);
+        }
       };
 
       ws.onclose = () => {
@@ -123,19 +134,23 @@ export default function MessageList() {
           <div className="flex items-start gap-4">
             <div className="relative">
               <Avatar>
+                <AvatarImage src={message.user?.avatar} />
                 <AvatarFallback>
                   {message.userId === user?.id ? "ME" : "U"}
                 </AvatarFallback>
               </Avatar>
-              <Badge 
-                variant="outline" 
-                className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-background bg-green-500"
+              <Badge
+                variant="outline"
+                className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-background ${
+                  message.user?.status === 'online' ? 'bg-green-500' :
+                    message.user?.status === 'away' ? 'bg-yellow-500' : 'bg-gray-500'
+                }`}
               />
             </div>
             <div className="flex-1">
               <div className="flex justify-between items-center mb-2">
                 <span className="font-medium">
-                  {message.userId === user?.id ? "You" : `User ${message.userId}`}
+                  {message.userId === user?.id ? "You" : message.user?.username || `User ${message.userId}`}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {format(new Date(message.createdAt), "p")}

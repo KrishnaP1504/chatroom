@@ -30,7 +30,7 @@ export function ProfileDialog({
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [newUsername, setNewUsername] = useState(user?.username || "");
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(user?.avatar || null);
+  const [selectedAvatar, setSelectedAvatar] = useState<string>(user?.avatar || BUILT_IN_AVATARS[0]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: UpdateUser) => {
@@ -49,6 +49,8 @@ export function ProfileDialog({
       avatar: selectedAvatar,
     });
   };
+
+  if (!user) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,9 +93,9 @@ export function ProfileDialog({
         </DialogHeader>
         <div className="flex flex-col items-center gap-6 py-4">
           <Avatar className="h-24 w-24">
-            <AvatarImage src={selectedAvatar || undefined} />
+            <AvatarImage src={selectedAvatar} />
             <AvatarFallback className="text-2xl">
-              {user?.username?.slice(0, 2).toUpperCase()}
+              {user.username.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
 
@@ -125,21 +127,21 @@ export function ProfileDialog({
                     onChange={(e) => setNewUsername(e.target.value)}
                   />
                 ) : (
-                  <p className="text-lg font-medium">{user?.username}</p>
+                  <p className="text-lg font-medium">{user.username}</p>
                 )}
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Email</Label>
-                <p className="text-lg">{user?.email}</p>
+                <p className="text-lg">{user.email}</p>
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">User ID</Label>
-                <p className="text-sm font-mono bg-muted p-2 rounded">{user?.userId}</p>
+                <p className="text-sm font-mono bg-muted p-2 rounded">{user.userId}</p>
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Account Created</Label>
                 <p className="text-sm">
-                  {new Date(user?.createdAt ?? "").toLocaleDateString()}
+                  {new Date(user.createdAt).toLocaleDateString()}
                 </p>
               </div>
             </CardContent>
