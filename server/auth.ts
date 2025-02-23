@@ -67,14 +67,16 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
-    const existingUser = await storage.getUserByUsername(req.body.username);
-    if (existingUser) {
-      return res.status(400).send("Username already exists");
-    }
-
+    // Check for existing email first
     const existingEmail = await storage.getUserByEmail(req.body.email);
     if (existingEmail) {
       return res.status(400).send("Email already exists");
+    }
+
+    // Then check for existing username
+    const existingUser = await storage.getUserByUsername(req.body.username);
+    if (existingUser) {
+      return res.status(400).send("Username already exists");
     }
 
     const user = await storage.createUser({
