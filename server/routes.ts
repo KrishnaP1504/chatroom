@@ -17,6 +17,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on('error', console.error);
   });
 
+  app.get("/api/users", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const users = await storage.getUsers();
+    res.json(users);
+  });
+
   app.get("/api/messages", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const messages = await storage.getMessages();
