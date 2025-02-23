@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, Search, User as UserIcon } from "lucide-react";
 import MessageList from "@/components/chat/message-list";
 import MessageInput from "@/components/chat/message-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,12 +8,22 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery } from "@tanstack/react-query";
 import { User } from "@shared/schema";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function ChatPage() {
   const { user, logoutMutation } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  // Filter users based on search query
+  const filteredUsers = users.filter(u => 
+    u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.userId.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -21,9 +31,14 @@ export default function ChatPage() {
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold">Chatroom</h1>
           <div className="flex items-center gap-4">
-            <span className="text-muted-foreground">
-              Welcome, {user?.username}
-            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              onClick={() => setShowProfile(!showProfile)}
+            >
+              <UserIcon className="h-5 w-5" />
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -39,13 +54,48 @@ export default function ChatPage() {
 
       <div className="flex-1 flex">
         {/* User List Sidebar */}
-        <aside className="w-64 border-r bg-muted/10 hidden md:block">
-          <div className="p-4">
+        <aside className="w-80 border-r bg-muted/10 hidden md:flex flex-col">
+          {/* Search Section */}
+          <div className="p-4 border-b">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search users by name or ID..."
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* User Profile Card */}
+          <Card className="m-4 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Your Profile</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarFallback>
+                    {user?.username?.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{user?.username}</p>
+                  <p className="text-sm text-muted-foreground">{user?.email}</p>
+                  <p className="text-xs text-muted-foreground mt-1">ID: {user?.userId}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Users List */}
+          <div className="flex-1 p-4">
             <h2 className="font-semibold mb-2">Online Users</h2>
             <Separator className="my-2" />
-            <ScrollArea className="h-[calc(100vh-10rem)]">
+            <ScrollArea className="h-[calc(100vh-18rem)]">
               <div className="space-y-2">
-                {users.map((chatUser) => (
+                {filteredUsers.map((chatUser) => (
                   <div
                     key={chatUser.id}
                     className={`p-2 rounded-lg flex items-center gap-2 ${
@@ -57,10 +107,15 @@ export default function ChatPage() {
                         {chatUser.username.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm font-medium">
-                      {chatUser.username}
-                      {chatUser.id === user?.id && " (You)"}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium block truncate">
+                        {chatUser.username}
+                        {chatUser.id === user?.id && " (You)"}
+                      </span>
+                      <span className="text-xs text-muted-foreground block truncate">
+                        ID: {chatUser.userId}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>

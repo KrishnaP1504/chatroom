@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { nanoid } from 'nanoid';
 
 declare global {
   namespace Express {
@@ -64,8 +65,14 @@ export function setupAuth(app: Express) {
       return res.status(400).send("Username already exists");
     }
 
+    const existingEmail = await storage.getUserByEmail(req.body.email);
+    if (existingEmail) {
+      return res.status(400).send("Email already exists");
+    }
+
     const user = await storage.createUser({
       ...req.body,
+      userId: nanoid(10), 
       password: await hashPassword(req.body.password),
     });
 
