@@ -64,7 +64,6 @@ function LoginForm() {
     resolver: zodResolver(insertUserSchema),
     defaultValues: {
       username: "",
-      email: "",
       password: "",
     },
   });
@@ -77,22 +76,12 @@ function LoginForm() {
           name="username"
           render={({ field }) => (
             <FormItem>
-              <Label>Username</Label>
+              <Label>Email or Username</Label>
               <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <Label>Email</Label>
-              <FormControl>
-                <Input type="email" {...field} />
+                <Input 
+                  {...field} 
+                  placeholder="Enter your email or username"
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
