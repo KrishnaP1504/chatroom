@@ -2,9 +2,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { WebSocketServer } from 'ws';
+import { createServer } from 'http';
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { connectMongoDB } from "./db/mongo";
 
 // Declare global WebSocket server
 declare global {
@@ -49,111 +49,103 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  try {
-    // Connect to MongoDB first
-    await connectMongoDB();
+  // Create HTTP server first
+  const server = await registerRoutes(app);
 
-    // Create HTTP server
-    const server = await registerRoutes(app);
+  // Create WebSocket server and make it globally available
+  global.wss = new WebSocketServer({ 
+    server,
+    path: '/ws'
+  });
 
-    // Create WebSocket server
-    global.wss = new WebSocketServer({ 
-      server,
-      path: '/ws'
-    });
+  // Track clients and their associated user IDs
+  const clients = new Map<any, number>();
 
-    // Track clients and their associated user IDs
-    const clients = new Map<any, string>();
+  global.wss.on('connection', async (ws, req) => {
+    log('WebSocket client connected');
 
-    global.wss.on('connection', async (ws, req) => {
-      log('WebSocket client connected');
+    // Extract user ID from session cookie
+    const cookieString = req.headers.cookie;
+    const sessionId = cookieString?.split(';')
+      .find(c => c.trim().startsWith('connect.sid='))
+      ?.split('=')[1];
 
-      const cookieString = req.headers.cookie;
-      const sessionId = cookieString?.split(';')
-        .find(c => c.trim().startsWith('connect.sid='))
-        ?.split('=')[1];
+    if (!sessionId) {
+      ws.close(4001, 'Unauthorized');
+      return;
+    }
 
-      if (!sessionId) {
+    // Get user from session
+    try {
+      // Find user ID from session
+      const sessionData = await new Promise((resolve) => {
+        storage.sessionStore.get(sessionId, (err, session) => {
+          resolve(session);
+        });
+      });
+
+      if (!sessionData || !sessionData.passport?.user) {
         ws.close(4001, 'Unauthorized');
         return;
       }
 
-      try {
-        const sessionData = await new Promise((resolve) => {
-          storage.sessionStore.get(sessionId.trim(), (err, session) => {
-            resolve(session);
-          });
-        });
+      const userId = sessionData.passport.user;
+      clients.set(ws, userId);
 
-        if (!sessionData || !sessionData.passport?.user) {
-          ws.close(4001, 'Unauthorized');
-          return;
+      // Update user status to online
+      await storage.updateUser(userId, { status: 'online' });
+
+      // Broadcast updated user list to all clients
+      const users = await storage.getUsers();
+      global.wss.clients.forEach(client => {
+        if (client.readyState === ws.OPEN) {
+          client.send(JSON.stringify({ type: 'users', data: users }));
         }
+      });
 
-        const userId = sessionData.passport.user;
-        clients.set(ws, userId);
+      ws.on('error', (error) => {
+        log(`WebSocket error: ${error.message}`);
+      });
 
-        // Update user status to online
-        await storage.updateUser(userId, { status: 'online' });
+      ws.on('close', async () => {
+        log('WebSocket client disconnected');
+        const userId = clients.get(ws);
+        if (userId) {
+          // Update user status to offline and last seen
+          await storage.updateUser(userId, { 
+            status: 'offline',
+            lastSeen: new Date()
+          });
+          clients.delete(ws);
 
-        // Broadcast updated user list to all clients
-        const users = await storage.getUsers();
-        global.wss.clients.forEach(client => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'users', data: users }));
-          }
-        });
-
-        ws.on('message', async (data) => {
-          log(`Received message from client: ${data}`);
-        });
-
-        ws.on('error', (error) => {
-          log(`WebSocket error: ${error.message}`);
-        });
-
-        ws.on('close', async () => {
-          log('WebSocket client disconnected');
-          const userId = clients.get(ws);
-          if (userId) {
-            await storage.updateUser(userId, { 
-              status: 'offline',
-              lastSeen: new Date()
-            });
-            clients.delete(ws);
-
-            const users = await storage.getUsers();
-            global.wss.clients.forEach(client => {
-              if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ type: 'users', data: users }));
-              }
-            });
-          }
-        });
-      } catch (error) {
-        log(`WebSocket authentication error: ${error}`);
-        ws.close(4001, 'Unauthorized');
-      }
-    });
-
-    if (app.get("env") === "development") {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
+          // Broadcast updated user list
+          const users = await storage.getUsers();
+          global.wss.clients.forEach(client => {
+            if (client.readyState === ws.OPEN) {
+              client.send(JSON.stringify({ type: 'users', data: users }));
+            }
+          });
+        }
+      });
+    } catch (error) {
+      log(`WebSocket authentication error: ${error}`);
+      ws.close(4001, 'Unauthorized');
     }
+  });
 
-    const port = process.env.PORT || 5000;
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
-      log(`Server running on port ${port}`);
-      log(`WebSocket server running on ws://0.0.0.0:${port}/ws`);
-    });
-
-  } catch (error) {
-    log(`Server startup error: ${error}`);
-    process.exit(1);
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
   }
+
+  const port = 5000;
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
+    log(`Server running on port ${port}`);
+    log(`WebSocket server running on ws://0.0.0.0:${port}/ws`);
+  });
 })();

@@ -5,12 +5,12 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { IUser } from "./db/models";
+import { User as SelectUser } from "@shared/schema";
 import { nanoid } from 'nanoid';
 
 declare global {
   namespace Express {
-    interface User extends IUser {}
+    interface User extends SelectUser {}
   }
 }
 
@@ -61,7 +61,7 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id: string, done) => {
+  passport.deserializeUser(async (id: number, done) => {
     const user = await storage.getUser(id);
     done(null, user);
   });
@@ -79,7 +79,7 @@ export function setupAuth(app: Express) {
 
     const user = await storage.createUser({
       ...req.body,
-      userId: nanoid(10),
+      userId: nanoid(10), 
       password: await hashPassword(req.body.password),
     });
 

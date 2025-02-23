@@ -36,9 +36,7 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-export type Message = typeof messages.$inferSelect & {
-  user?: User;
-};
+export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
 export const updateUserSchema = z.object({
