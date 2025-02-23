@@ -20,8 +20,9 @@ export default function MessageList() {
   // Websocket connection with reconnection logic
   useEffect(() => {
     function connect() {
-      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const ws = new WebSocket(`${protocol}://${window.location.host}/ws`);
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         console.log("WebSocket connected");

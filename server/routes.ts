@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocket, WebSocketServer } from "ws";
+import { WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertMessageSchema } from "@shared/schema";
@@ -8,14 +8,6 @@ import { insertMessageSchema } from "@shared/schema";
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   const httpServer = createServer(app);
-  const wss = new WebSocketServer({ 
-    server: httpServer,
-    path: "/ws"
-  });
-
-  wss.on('connection', (ws) => {
-    ws.on('error', console.error);
-  });
 
   app.get("/api/users", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -41,8 +33,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userId: req.user.id,
     });
 
-    // Broadcast to all clients
-    wss.clients.forEach((client) => {
+    // Emit to WebSocket clients through the global wss instance
+    global.wss?.clients?.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(message));
       }
