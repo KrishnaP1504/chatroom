@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import { setupAuth } from "./auth";
+import { storage } from "./storage";
 
 // Declare global WebSocket server
 declare global {
@@ -12,6 +14,9 @@ declare global {
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Setup auth first before routes
+setupAuth(app);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -45,35 +50,87 @@ app.use((req, res, next) => {
 
 (async () => {
   // Create HTTP server first
-  const server = createServer(app);
+  const server = await registerRoutes(app);
 
   // Create WebSocket server and make it globally available
   global.wss = new WebSocketServer({ 
     server,
-    path: '/ws',
-    perMessageDeflate: false // Disable per-message deflate to reduce latency
+    path: '/ws'
   });
 
-  global.wss.on('connection', (ws) => {
+  // Track clients and their associated user IDs
+  const clients = new Map<any, number>();
+
+  global.wss.on('connection', async (ws, req) => {
     log('WebSocket client connected');
 
-    ws.on('error', (error) => {
-      log(`WebSocket error: ${error.message}`);
-    });
+    // Extract user ID from session cookie
+    const cookieString = req.headers.cookie;
+    const sessionId = cookieString?.split(';')
+      .find(c => c.trim().startsWith('connect.sid='))
+      ?.split('=')[1];
 
-    ws.on('close', () => {
-      log('WebSocket client disconnected');
-    });
-  });
+    if (!sessionId) {
+      ws.close(4001, 'Unauthorized');
+      return;
+    }
 
-  await registerRoutes(app);
+    // Get user from session
+    try {
+      // Find user ID from session
+      const sessionData = await new Promise((resolve) => {
+        storage.sessionStore.get(sessionId, (err, session) => {
+          resolve(session);
+        });
+      });
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+      if (!sessionData || !sessionData.passport?.user) {
+        ws.close(4001, 'Unauthorized');
+        return;
+      }
 
-    res.status(status).json({ message });
-    throw err;
+      const userId = sessionData.passport.user;
+      clients.set(ws, userId);
+
+      // Update user status to online
+      await storage.updateUser(userId, { status: 'online' });
+
+      // Broadcast updated user list to all clients
+      const users = await storage.getUsers();
+      global.wss.clients.forEach(client => {
+        if (client.readyState === ws.OPEN) {
+          client.send(JSON.stringify({ type: 'users', data: users }));
+        }
+      });
+
+      ws.on('error', (error) => {
+        log(`WebSocket error: ${error.message}`);
+      });
+
+      ws.on('close', async () => {
+        log('WebSocket client disconnected');
+        const userId = clients.get(ws);
+        if (userId) {
+          // Update user status to offline and last seen
+          await storage.updateUser(userId, { 
+            status: 'offline',
+            lastSeen: new Date()
+          });
+          clients.delete(ws);
+
+          // Broadcast updated user list
+          const users = await storage.getUsers();
+          global.wss.clients.forEach(client => {
+            if (client.readyState === ws.OPEN) {
+              client.send(JSON.stringify({ type: 'users', data: users }));
+            }
+          });
+        }
+      });
+    } catch (error) {
+      log(`WebSocket authentication error: ${error}`);
+      ws.close(4001, 'Unauthorized');
+    }
   });
 
   if (app.get("env") === "development") {

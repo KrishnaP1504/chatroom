@@ -4,11 +4,14 @@ import { z } from "zod";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  userId: text("user_id").notNull().unique(), // Unique user ID for searching
+  userId: text("user_id").notNull().unique(),
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  avatar: text("avatar"),
+  status: text("status").default("offline"),
+  lastSeen: timestamp("last_seen"),
 });
 
 export const messages = pgTable("messages", {
@@ -18,6 +21,7 @@ export const messages = pgTable("messages", {
     .notNull()
     .references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  reactions: text("reactions").array(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -34,3 +38,12 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+export const updateUserSchema = z.object({
+  username: z.string().min(1).optional(),
+  avatar: z.string().optional(),
+  status: z.enum(["online", "offline", "away"]).optional(),
+  lastSeen: z.date().optional(),
+});
+
+export type UpdateUser = z.infer<typeof updateUserSchema>;

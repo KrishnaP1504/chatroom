@@ -1,4 +1,4 @@
-import { User, Message, InsertUser, InsertMessage } from "@shared/schema";
+import { User, Message, InsertUser, InsertMessage, UpdateUser } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 
@@ -10,6 +10,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUsers(): Promise<User[]>;
   createUser(user: InsertUser & { userId: string }): Promise<User>;
+  updateUser(id: number, update: UpdateUser): Promise<User>;
   getMessages(): Promise<Message[]>;
   createMessage(message: InsertMessage & { userId: number }): Promise<Message>;
   sessionStore: session.Store;
@@ -57,10 +58,33 @@ export class MemStorage implements IStorage {
     const user = { 
       ...insertUser, 
       id,
-      createdAt: new Date()
+      createdAt: new Date(),
+      avatar: null,
+      status: "online",
+      lastSeen: null
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUser(id: number, update: UpdateUser): Promise<User> {
+    const user = await this.getUser(id);
+    if (!user) throw new Error("User not found");
+
+    // Check if username is taken
+    if (update.username) {
+      const existing = await this.getUserByUsername(update.username);
+      if (existing && existing.id !== id) {
+        throw new Error("Username already taken");
+      }
+    }
+
+    const updatedUser = {
+      ...user,
+      ...update,
+    };
+    this.users.set(id, updatedUser);
+    return updatedUser;
   }
 
   async getMessages(): Promise<Message[]> {
@@ -75,6 +99,7 @@ export class MemStorage implements IStorage {
       ...message,
       id,
       createdAt: new Date(),
+      reactions: [],
     };
     this.messages.set(id, newMessage);
     return newMessage;

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertMessageSchema } from "@shared/schema";
+import { insertMessageSchema, updateUserSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -41,6 +41,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     res.status(201).json(message);
+  });
+
+  // Add profile update route
+  app.patch("/api/user", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const result = updateUserSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json(result.error);
+    }
+
+    const updatedUser = await storage.updateUser(req.user.id, result.data);
+    res.json(updatedUser);
   });
 
   return httpServer;
