@@ -10,11 +10,12 @@ import { useQuery } from "@tanstack/react-query";
 import { User } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProfileDialog } from "@/components/profile-dialog";
 
 export default function ChatPage() {
   const { user, logoutMutation } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
@@ -35,7 +36,7 @@ export default function ChatPage() {
               variant="ghost"
               size="icon"
               className="relative"
-              onClick={() => setShowProfile(!showProfile)}
+              onClick={() => setShowProfile(true)}
             >
               <UserIcon className="h-5 w-5" />
             </Button>
@@ -68,32 +69,11 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* User Profile Card */}
-          <Card className="m-4 bg-primary/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Your Profile</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarFallback>
-                    {user?.username?.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{user?.username}</p>
-                  <p className="text-sm text-muted-foreground">{user?.email}</p>
-                  <p className="text-xs text-muted-foreground mt-1">ID: {user?.userId}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Users List */}
           <div className="flex-1 p-4">
             <h2 className="font-semibold mb-2">Online Users</h2>
             <Separator className="my-2" />
-            <ScrollArea className="h-[calc(100vh-18rem)]">
+            <ScrollArea className="h-[calc(100vh-8rem)]">
               <div className="space-y-2">
                 {filteredUsers.map((chatUser) => (
                   <div
@@ -131,6 +111,11 @@ export default function ChatPage() {
           <MessageInput />
         </main>
       </div>
+
+      <ProfileDialog
+        open={showProfile}
+        onOpenChange={setShowProfile}
+      />
     </div>
   );
 }
