@@ -36,9 +36,9 @@ export default function MessageList() {
       if (isConnecting) return;
       setIsConnecting(true);
 
-      // Use window.location to construct WebSocket URL with explicit ws/wss protocol
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // Get the current window location and construct the WebSocket URL
       const host = window.location.host;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${host}/ws`;
 
       console.log('Connecting to WebSocket:', wsUrl);
@@ -50,16 +50,20 @@ export default function MessageList() {
       };
 
       ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'users') {
-          // Handle users update
-          queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-        } else {
-          // Handle new message
-          queryClient.setQueryData<Message[]>(["/api/messages"], (old = []) => [
-            ...old,
-            data,
-          ]);
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'users') {
+            // Handle users update
+            queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+          } else {
+            // Handle new message
+            queryClient.setQueryData<Message[]>(["/api/messages"], (old = []) => [
+              ...old,
+              data,
+            ]);
+          }
+        } catch (error) {
+          console.error("Error processing WebSocket message:", error);
         }
       };
 
@@ -134,7 +138,7 @@ export default function MessageList() {
           <div className="flex items-start gap-4">
             <div className="relative">
               <Avatar>
-                <AvatarImage src={message.user?.avatar} />
+                <AvatarImage src={message.user?.avatar || undefined} />
                 <AvatarFallback>
                   {message.userId === user?.id ? "ME" : "U"}
                 </AvatarFallback>

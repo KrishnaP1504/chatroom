@@ -23,8 +23,8 @@ export interface IMessage extends Document {
 // User Schema
 const UserSchema = new Schema<IUser>({
   userId: { type: String, required: true, unique: true },
-  username: { type: String, required: true, unique: true },
-  email: { type: String, required: true, unique: true },
+  username: { type: String, required: true },
+  email: { type: String, required: true },
   password: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
   avatar: { type: String },
@@ -40,9 +40,9 @@ const MessageSchema = new Schema<IMessage>({
   reactions: [{ type: String }]
 });
 
-// Create indexes
-UserSchema.index({ username: 1 });
-UserSchema.index({ email: 1 });
+// Create indexes without duplicates
+UserSchema.index({ username: 1 }, { unique: true });
+UserSchema.index({ email: 1 }, { unique: true });
 MessageSchema.index({ createdAt: 1 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

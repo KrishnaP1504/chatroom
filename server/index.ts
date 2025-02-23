@@ -11,15 +11,6 @@ declare global {
   var wss: WebSocketServer;
 }
 
-// Extend express-session SessionData to include passport
-declare module 'express-session' {
-  interface SessionData {
-    passport?: {
-      user: string;
-    };
-  }
-}
-
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -108,9 +99,13 @@ app.use((req, res, next) => {
         // Broadcast updated user list to all clients
         const users = await storage.getUsers();
         global.wss.clients.forEach(client => {
-          if (client.readyState === ws.OPEN) {
+          if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ type: 'users', data: users }));
           }
+        });
+
+        ws.on('message', async (data) => {
+          log(`Received message from client: ${data}`);
         });
 
         ws.on('error', (error) => {
@@ -129,7 +124,7 @@ app.use((req, res, next) => {
 
             const users = await storage.getUsers();
             global.wss.clients.forEach(client => {
-              if (client.readyState === ws.OPEN) {
+              if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({ type: 'users', data: users }));
               }
             });
