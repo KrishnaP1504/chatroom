@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
@@ -6,7 +9,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
-import { nanoid } from 'nanoid';
+import { nanoid } from "nanoid";
 
 declare global {
   namespace Express {
@@ -31,7 +34,7 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || "default-secret",
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -44,20 +47,25 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      // Try to find user by username first
+      console.log(`🔹 Attempting login for: ${username}`);
+
       let user = await storage.getUserByUsername(username);
+      if (!user) user = await storage.getUserByEmail(username);
 
-      // If not found by username, try email
       if (!user) {
-        user = await storage.getUserByEmail(username);
+        console.log("❌ User not found");
+        return done(null, false, { message: "User not found" });
       }
 
-      if (!user || !(await comparePasswords(password, user.password))) {
-        return done(null, false);
-      } else {
-        return done(null, user);
+      const passwordMatch = await comparePasswords(password, user.password);
+      if (!passwordMatch) {
+        console.log("❌ Incorrect password");
+        return done(null, false, { message: "Incorrect password" });
       }
-    }),
+
+      console.log("✅ Login successful!");
+      return done(null, user);
+    })
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
@@ -67,43 +75,48 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
-    // Check for existing email first
-    const existingEmail = await storage.getUserByEmail(req.body.email);
-    if (existingEmail) {
-      return res.status(400).send("Email already exists");
+    try {
+      const existingEmail = await storage.getUserByEmail(req.body.email);
+      if (existingEmail) return res.status(400).send("Email already exists");
+
+      const existingUser = await storage.getUserByUsername(req.body.username);
+      if (existingUser) return res.status(400).send("Username already exists");
+
+      const user = await storage.createUser({
+        ...req.body,
+        userId: nanoid(10),
+        password: await hashPassword(req.body.password),
+      });
+
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.status(201).json(user);
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Internal Server Error" });
     }
-
-    // Then check for existing username
-    const existingUser = await storage.getUserByUsername(req.body.username);
-    if (existingUser) {
-      return res.status(400).send("Username already exists");
-    }
-
-    const user = await storage.createUser({
-      ...req.body,
-      userId: nanoid(10), 
-      password: await hashPassword(req.body.password),
-    });
-
-    req.login(user, (err) => {
-      if (err) return next(err);
-      res.status(201).json(user);
-    });
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
-  });
-
-  app.post("/api/logout", (req, res, next) => {
-    req.logout((err) => {
-      if (err) return next(err);
-      res.sendStatus(200);
-    });
-  });
-
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
-  });
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: Error | null, user: Express.User | false, info: { message?: string } | undefined) => {
+      if (err) {
+        console.error("❌ Authentication Error:", err);
+        return next(err);
+      }
+      if (!user) {
+        console.warn("⚠️ Login Failed:", info?.message);
+        return res.status(401).json({ error: info?.message || "Login failed" });
+      }
+  
+      req.login(user, (err: Error | null) => {
+        if (err) {
+          console.error("❌ Login Error:", err);
+          return next(err);
+        }
+        console.log("✅ User logged in:", user.username);
+        res.status(200).json(user);
+      });
+    })(req, res, next);
+  }); // Ensure this closing } is present
+  
 }

@@ -4,8 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
@@ -15,7 +13,6 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
 
-  // Redirect if already logged in
   if (user) {
     setLocation("/");
     return null;
@@ -44,16 +41,6 @@ export default function AuthPage() {
           </CardContent>
         </Card>
       </div>
-      <div className="hidden md:flex items-center justify-center bg-primary/5 p-8">
-        <div className="max-w-md space-y-4 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
-            Join the conversation
-          </h2>
-          <p className="text-muted-foreground">
-            Connect with others in real-time through our simple and intuitive chat platform.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -61,7 +48,6 @@ export default function AuthPage() {
 function LoginForm() {
   const { loginMutation } = useAuth();
   const form = useForm({
-    resolver: zodResolver(insertUserSchema),
     defaultValues: {
       username: "",
       password: "",
@@ -70,7 +56,13 @@ function LoginForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => loginMutation.mutate(data))} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit((data) => {
+          console.log("Submitting login data:", data);
+          loginMutation.mutate(data);
+        })}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="username"
@@ -78,10 +70,7 @@ function LoginForm() {
             <FormItem>
               <Label>Email or Username</Label>
               <FormControl>
-                <Input 
-                  {...field} 
-                  placeholder="Enter your email or username"
-                />
+                <Input {...field} placeholder="Enter your email or username" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -112,7 +101,6 @@ function LoginForm() {
 function RegisterForm() {
   const { registerMutation } = useAuth();
   const form = useForm({
-    resolver: zodResolver(insertUserSchema),
     defaultValues: {
       username: "",
       email: "",
@@ -122,7 +110,13 @@ function RegisterForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => registerMutation.mutate(data))} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit((data) => {
+          console.log("Submitting registration data:", data);
+          registerMutation.mutate(data);
+        })}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="username"

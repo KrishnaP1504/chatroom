@@ -3,7 +3,7 @@ import { Message } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { queryClient } from "@/lib/queryClient";
@@ -16,32 +16,32 @@ export default function MessageList() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages"],
-    enabled: !!user // Only fetch messages when user is authenticated
+    enabled: !!user, // Only fetch messages when user is authenticated
   });
 
-  // Filter messages based on search query
-  const filteredMessages = messages.filter(message => 
+  const filteredMessages = messages.filter((message) =>
     message.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Websocket connection with reconnection logic
+  // WebSocket connection with improved reconnection logic
   useEffect(() => {
-    if (!user) return; // Don't connect if user is not authenticated
+    if (!user) return;
 
     function connect() {
-      if (isConnecting) return;
-      setIsConnecting(true);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        console.log("WebSocket already connected.");
+        return;
+      }
 
-      const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket("ws://127.0.0.1:8080/ws");
 
       ws.onopen = () => {
         console.log("WebSocket connected");
-        setIsConnecting(false);
+        setReconnectAttempts(0); // Reset reconnect attempts
       };
 
       ws.onmessage = (event) => {
@@ -53,14 +53,14 @@ export default function MessageList() {
       };
 
       ws.onclose = () => {
-        console.log("WebSocket disconnected, attempting to reconnect...");
-        setIsConnecting(false);
-        setTimeout(connect, 1000);
+        console.log("WebSocket disconnected. Attempting to reconnect...");
+        let delay = Math.min(5000, (reconnectAttempts + 1) * 1000); // Exponential backoff
+        setTimeout(connect, delay);
+        setReconnectAttempts((prev) => prev + 1);
       };
 
       ws.onerror = (error) => {
         console.error("WebSocket error:", error);
-        setIsConnecting(false);
         ws.close();
       };
 
@@ -70,9 +70,7 @@ export default function MessageList() {
     connect();
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      wsRef.current?.close();
     };
   }, [user]);
 
@@ -121,17 +119,11 @@ export default function MessageList() {
           }`}
         >
           <div className="flex items-start gap-4">
-            <div className="relative">
-              <Avatar>
-                <AvatarFallback>
-                  {message.userId === user?.id ? "ME" : "U"}
-                </AvatarFallback>
-              </Avatar>
-              <Badge 
-                variant="outline" 
-                className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-background bg-green-500"
-              />
-            </div>
+            <Avatar>
+              <AvatarFallback>
+                {message.userId === user?.id ? "ME" : "U"}
+              </AvatarFallback>
+            </Avatar>
             <div className="flex-1">
               <div className="flex justify-between items-center mb-2">
                 <span className="font-medium">
@@ -142,13 +134,6 @@ export default function MessageList() {
                 </span>
               </div>
               <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-              {message.reactions && message.reactions.length > 0 && (
-                <div className="flex gap-1 mt-2">
-                  {message.reactions.map((reaction, index) => (
-                    <span key={index} className="text-sm">{reaction}</span>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </Card>
