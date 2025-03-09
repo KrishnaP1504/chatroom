@@ -78,11 +78,12 @@ app.use((req, res, next) => {
     // Get user from session
     try {
       // Find user ID from session
-      const sessionData = await new Promise((resolve) => {
+      const sessionData = await new Promise<{ passport?: { user?: number } } | null>((resolve) => {
         storage.sessionStore.get(sessionId, (err, session) => {
-          resolve(session);
+          resolve(session as { passport?: { user?: number } } | null);
         });
       });
+      
 
       if (!sessionData || !sessionData.passport?.user) {
         ws.close(4001, 'Unauthorized');

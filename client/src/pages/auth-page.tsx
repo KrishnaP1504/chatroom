@@ -10,9 +10,10 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
+import { z } from "zod";
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation } = useAuth();
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
 
   // Redirect if already logged in
@@ -46,9 +47,7 @@ export default function AuthPage() {
       </div>
       <div className="hidden md:flex items-center justify-center bg-primary/5 p-8">
         <div className="max-w-md space-y-4 text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
-            Join the conversation
-          </h2>
+          <h2 className="text-3xl font-bold tracking-tight">Join the conversation</h2>
           <p className="text-muted-foreground">
             Connect with others in real-time through our simple and intuitive chat platform.
           </p>
@@ -60,58 +59,69 @@ export default function AuthPage() {
 
 function LoginForm() {
   const { loginMutation } = useAuth();
-  const form = useForm({
-    resolver: zodResolver(insertUserSchema),
-    defaultValues: {
+
+  const loginSchema = insertUserSchema.pick({ username: true, password: true });
+
+  const form = useForm<z.infer<typeof loginSchema>>({
+    resolver: zodResolver(loginSchema),
+      defaultValues: {
       username: "",
       password: "",
-    },
-  });
+      },
+    });
 
+  
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => loginMutation.mutate(data))} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit((data) => {
+          console.log("Login Request:", data);
+          loginMutation.mutate(data, {
+            onError: (error) => console.error("Login Failed:", error.message),
+          });
+        })}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="username"
           render={({ field }) => (
             <FormItem>
-              <Label>Email or Username</Label>
+              <Label htmlFor="username">Username</Label>
               <FormControl>
-                <Input 
-                  {...field} 
-                  placeholder="Enter your email or username"
-                />
+              <Input id="username"{...field} placeholder="Enter username" />
               </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            <FormMessage />
+        </FormItem>
+      )}
+    />
         <FormField
           control={form.control}
           name="password"
           render={({ field }) => (
             <FormItem>
-              <Label>Password</Label>
+              <Label htmlFor="password">Password</Label>
               <FormControl>
-                <Input type="password" {...field} />
+                <Input id="password" type="password" {...field} />
               </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-          {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Login
-        </Button>
-      </form>
-    </Form>
+            <FormMessage />
+        </FormItem>
+      )}
+    />
+    {loginMutation.error && <p className="text-red-500">{loginMutation.error.message}</p>}
+    <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+      {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      Login
+    </Button>
+  </form>
+  </Form>
   );
 }
 
 function RegisterForm() {
   const { registerMutation } = useAuth();
-  const form = useForm({
+
+  const form = useForm<{ username: string; email: string; password: string }>({
     resolver: zodResolver(insertUserSchema),
     defaultValues: {
       username: "",
@@ -128,12 +138,12 @@ function RegisterForm() {
           name="username"
           render={({ field }) => (
             <FormItem>
-              <Label>Username</Label>
+              <Label htmlFor="register-username">Username</Label>
               <FormControl>
-                <Input {...field} />
+                <Input id="register-username"  {...field} />
               </FormControl>
-              <FormMessage />
-            </FormItem>
+            <FormMessage />
+        </FormItem>
           )}
         />
         <FormField
@@ -141,22 +151,22 @@ function RegisterForm() {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <Label>Email</Label>
+              <Label htmlFor="register-email">Email</Label>
               <FormControl>
-                <Input type="email" {...field} />
+                <Input id="register-email"  type="email" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
-          )}
+          )}        
         />
         <FormField
           control={form.control}
           name="password"
           render={({ field }) => (
             <FormItem>
-              <Label>Password</Label>
+              <Label htmlFor="register-password">Password</Label>
               <FormControl>
-                <Input type="password" {...field} />
+                <Input id="register-password"  type="password" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

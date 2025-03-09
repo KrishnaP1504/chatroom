@@ -144,8 +144,8 @@ export default function MessageList() {
               <p className="text-sm whitespace-pre-wrap">{message.content}</p>
               {message.reactions && message.reactions.length > 0 && (
                 <div className="flex gap-1 mt-2">
-                  {message.reactions.map((reaction, index) => (
-                    <span key={index} className="text-sm">{reaction}</span>
+                  {message.reactions.map((reaction: string, index: number) => (
+                  <span key={index}>{reaction}</span>
                   ))}
                 </div>
               )}

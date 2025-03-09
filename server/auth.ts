@@ -10,7 +10,9 @@ import { nanoid } from 'nanoid';
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends SelectUser {
+      id: number; 
+    }
   }
 }
 
@@ -31,7 +33,7 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || "your-secret-key",
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -91,9 +93,23 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
-  });
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: Error | null, user: Express.User | false, info: { message: string } | undefined) => {
+        console.log("Login Error:", err);
+        console.log("Login Info:", info);
+
+        if (err) return res.status(500).send("Internal Server Error");
+        if (!user) return res.status(401).send("Invalid username or password");
+
+        req.logIn(user, (err: Error | null) => {
+            if (err) return res.status(500).send("Session Error");
+            return res.status(200).json(user);
+        });
+    })(req, res, next);
+});
+
+
+  
 
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {
